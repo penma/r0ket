@@ -136,8 +136,7 @@ int selectFile(char *filename, char *extension)
 		}
 		lcdRefresh();
 
-		char key = getInputWait();
-		getInputWaitRelease();
+		char key = getInputWaitRepeat();
 		switch (key) {
 		case BTN_DOWN:
 			if (selected < count - 1) {
