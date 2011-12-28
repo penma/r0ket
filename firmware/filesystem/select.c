@@ -114,6 +114,12 @@ int selectFile(char *filename, char *extension)
 		lcdPrint(pwd);
 		lcdPrintln("]");
 
+		for (int i = 0; i < 98; i++) {
+			lcdSetPixel(i, 9, 1);
+		}
+
+		lcdSetCrsr(0, 12);
+
 		if (!count) {
 			lcdPrintln("- empty");
 		} else {
