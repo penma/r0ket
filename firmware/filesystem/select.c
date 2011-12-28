@@ -6,115 +6,184 @@
 #include "filesystem/ff.h"
 #include "basic/basic.h"
 
-#define FLEN 13
+/* XXX executeSelect has a 15 byte buffer. 0: + filename + \0 */
+#define FLEN 12
 
-int getFiles(char files[][FLEN], uint8_t count, uint16_t skip, const char *ext)
-{
-    DIR dir;                /* Directory object */
-    FILINFO Finfo;
-    FRESULT res;
-    int pos = 0;
-    int extlen = strlen(ext);
-    res = f_opendir(&dir, "0:");
-    if(res){
-        //lcdPrint("OpenDir:"); lcdPrintln(f_get_rc_string(res)); lcdRefresh(); 
-        return 0;
-    };
-    while(f_readdir(&dir, &Finfo) == FR_OK && Finfo.fname[0]){
-        int len=strlen(Finfo.fname);
+/* retrieve filelist.
+ * not (yet) sorted.
+ * flen+2 because optional slash and nullbyte
+ */
+static int retrieve_files(char files[][FLEN+2],
+                          uint8_t count, uint16_t skip,
+                          char *ext,
+                          char *cwd,
+                          int *total) {
+	if (strlen(cwd) > FLEN) {
+		lcdPrintln("cwd too long");
+		lcdRefresh();
+		return 0;
+	}
 
-        if(len<extlen)
-            continue;
+	char path[FLEN+3];
+	path[0] = '0';
+	path[1] = ':';
+	strcpy(path + 2, cwd);
+	path[2 + strlen(cwd)] = 0;
 
-        if( strcmp(Finfo.fname+len-extlen, ext) != 0)
-            continue;
+	/* remove trailing slash, otherwise INVALID_NAME */
+	if (path[2 + strlen(cwd) - 1] == '/') {
+		path[2 + strlen(cwd) - 1] = 0;
+	}
 
-        if (Finfo.fattrib & AM_DIR)
-            continue;
+	DIR dir;
+	FILINFO fileinfo;
+	FRESULT res;
 
-        if( skip>0 ){
-            skip--;
-            continue;
-        };
+	res = f_opendir(&dir, path);
+	if (res) {
+		lcdPrintln("E[f_opendir]");
+		lcdPrintln(path);
+		lcdPrintln(f_get_rc_string(res));
+		lcdRefresh();
+		return 0;
+	}
 
-        strcpy(files[pos++],Finfo.fname);
-        if( pos == count )
-            break;
-    }
-    return pos;
+	int pos = 0;
+	int extlen = strlen(ext);
+	if (total) {
+		(*total) = 0;
+	}
+	while (f_readdir(&dir, &fileinfo) == FR_OK && fileinfo.fname[0]) {
+		int len = strlen(fileinfo.fname);
+
+		if (extlen && !(fileinfo.fattrib & AM_DIR)) {
+			if (len < extlen) {
+				continue;
+			}
+
+			/* fixme, proper ext check */
+			if (strcmp(fileinfo.fname + len - extlen, ext) != 0) {
+				continue;
+			}
+		}
+
+		if (total) {
+			(*total)++;
+		}
+
+		if (skip > 0) {
+			skip--;
+			continue;
+		}
+
+		if (pos < count) {
+			strcpy(files[pos], fileinfo.fname);
+			if (fileinfo.fattrib & AM_DIR) {
+				files[pos][len]     = '/';
+				files[pos][len + 1] = 0;
+			}
+			pos++;
+		}
+	}
+
+	return pos;
 }
 
 #define PERPAGE 7
-int selectFile(char *filename, const char *extension)
+int selectFile(char *filename, char *extension)
 {
     int skip = 0;
-    char key;
     int selected = 0;
+    char pwd[FLEN];
+    memset(pwd, 0, FLEN);
     font=&Font_7x8;
-    while(1){
-        char files[PERPAGE][FLEN];
-        int count = getFiles(files, PERPAGE, skip, extension);
-        if(!count){
-            lcdPrintln("No Files?");
-            lcdRefresh();
-            getInputWait();
-            getInputWaitRelease();
-            return -1;
-        };
 
-        if(count<PERPAGE && selected==count){
-            skip--;
-            continue;
-        };
-        
-        redraw:
-        lcdClear();
-        lcdPrintln("Select file:");
-        for(int i=0; i<count; i++){
-            if( selected == i )
-                lcdPrint("*");
-            else
-                lcdPrint(" ");
-            lcdSetCrsrX(14);
-            int dot=-1;
-            for(int j=0;files[j];j++)
-                if(files[i][j]=='.'){
-                    files[i][j]=0;
-                    dot=j;
-                    break;
-                };
-            lcdPrintln(files[i]);
-            if(dot>0)
-                files[i][dot]='.';
-        }
-        lcdRefresh();
-        key=getInputWait();
-        getInputWaitRelease();
-        switch(key){
-            case BTN_DOWN:
-                if( selected < count-1 ){
-                    selected++;
-                    goto redraw;
-                }else{
-                    skip++;
-                }
-                break;
-            case BTN_UP:
-                if( selected > 0 ){
-                    selected--;
-                    goto redraw;
-                }else{
-                    if( skip > 0 ){
-                        skip--;
-                    }
-                }
-                break;
-            case BTN_LEFT:
-                return -1;
-            case BTN_ENTER:
-            case BTN_RIGHT:
-                strcpy(filename, files[selected]);
-                return 0;
-        }
-    }
+	while(1) {
+		int total;
+		char files[PERPAGE][FLEN+2];
+		int count = retrieve_files(files, PERPAGE, skip, extension, pwd, &total);
+		if (selected >= count) {
+			selected = count - 1;
+		}
+
+		/* optimization: don't reload filelist if only redraw needed */
+		redraw:
+
+		lcdClear();
+		lcdPrint("[");
+		lcdPrint(pwd);
+		lcdPrintln("]");
+
+		if (!count) {
+			lcdPrintln("- empty");
+		} else {
+			for (int i = 0; i < count; i++) {
+				if (selected == i) {
+					lcdPrint("*");
+				} else {
+					lcdPrint(" ");
+				}
+				lcdSetCrsrX(14);
+
+				lcdPrintln(files[i]);
+			}
+		}
+		lcdRefresh();
+
+		char key = getInputWait();
+		getInputWaitRelease();
+		switch (key) {
+		case BTN_DOWN:
+			if (selected < count - 1) {
+				selected++;
+				goto redraw;
+			} else {
+				if (skip < total - PERPAGE) {
+					skip++;
+				} else {
+					skip = 0;
+					selected = 0;
+					continue;
+				}
+			}
+			break;
+		case BTN_UP:
+			if (selected > 0) {
+				selected--;
+				goto redraw;
+			} else {
+				if (skip > 0) {
+					skip--;
+				} else {
+					skip = total - PERPAGE;
+					if (skip < 0) {
+						skip = 0;
+					}
+					selected = PERPAGE - 1;
+					continue;
+				}
+			}
+			break;
+		case BTN_LEFT:
+			if (pwd[0] == 0) {
+				return -1;
+			} else {
+				pwd[0] = 0;
+				continue;
+			}
+		case BTN_ENTER:
+		case BTN_RIGHT:
+			if (count) {
+				if (files[selected][strlen(files[selected]) - 1] == '/') {
+					/* directory selected */
+					strcpy(pwd, files[selected]);
+					continue;
+				} else {
+					strcpy(filename, pwd);
+					strcpy(filename + strlen(pwd), files[selected]);
+					return 0;
+				}
+			}
+		}
+	}
 }
