@@ -186,6 +186,7 @@ int selectFile(char *filename, char *extension)
 				} else {
 					strcpy(filename, pwd);
 					strcpy(filename + strlen(pwd), files[selected]);
+					getInputWaitRelease(); /* ?! */
 					return 0;
 				}
 			}
