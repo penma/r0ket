@@ -22,7 +22,7 @@ struct FONT_DEF {
 
 struct EXTFONT {
     char type; // 0: none, 1: static, 2: loaded
-    char name[13];
+    char name[26];
     struct FONT_DEF def;
 };
 

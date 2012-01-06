@@ -35,7 +35,7 @@ struct CDESC the_config[]= {
 };
 
 char nickname[MAXNICK]="anonymous";
-char nickfont[FILENAMELEN];
+char nickfont[FILENAMELEN*2];
 char nickl0[FILENAMELEN];
 
 #define CONFFILE "r0ket.cfg"

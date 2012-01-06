@@ -26,7 +26,7 @@ void setIntFont(const struct FONT_DEF * newfont){
 };
 
 void setExtFont(const char *fname){
-    if(strlen(fname)>8+4)
+    if(strlen(fname)>25)
         return;
     strcpy(efont.name,fname);
 //    memcpy(efont.name+strlen(fname),".f0n",5);
