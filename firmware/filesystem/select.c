@@ -96,7 +96,7 @@ int selectFile(char *filename, char *extension)
     int selected = 0;
     char pwd[FLEN];
     memset(pwd, 0, FLEN);
-    font=&Font_7x8;
+    setSystemFont();
 
 	while(1) {
 		int total;
@@ -112,7 +112,7 @@ int selectFile(char *filename, char *extension)
 		lcdClear();
 		lcdPrint("[");
 		lcdPrint(pwd);
-		lcdPrintln("]");
+		lcdPrint("]");
 
 		for (int i = 0; i < 98; i++) {
 			lcdSetPixel(i, 9, 1);
@@ -129,8 +129,8 @@ int selectFile(char *filename, char *extension)
 				} else {
 					lcdPrint(" ");
 				}
-				lcdSetCrsrX(14);
 
+				lcdSetCrsrX(14);
 				lcdPrintln(files[i]);
 			}
 		}
