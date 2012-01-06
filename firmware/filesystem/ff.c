@@ -535,23 +535,10 @@ void mem_cpy (void* dst, const void* src, UINT cnt) {
 }
 
 /* Fill memory */
-static
-void mem_set (void* dst, int val, UINT cnt) {
-	BYTE *d = (BYTE*)dst;
-
-	while (cnt--)
-		*d++ = (BYTE)val;
-}
+#define mem_set memset
 
 /* Compare memory to memory */
-static
-int mem_cmp (const void* dst, const void* src, UINT cnt) {
-	const BYTE *d = (const BYTE *)dst, *s = (const BYTE *)src;
-	int r = 0;
-
-	while (cnt-- && (r = *d++ - *s++) == 0) ;
-	return r;
-}
+#define mem_cmp memcmp
 
 /* Check if chr is contained in the string */
 static
