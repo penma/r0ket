@@ -43,14 +43,14 @@ if($cmd =~ /^r/){
 			my $rr="";
 			if (@fh = $sel->can_read(100)) {
 				sysread($fh[0],$rr,1024);
-                $rr=~s/\\\\/\\/g;
 				$read.=$rr;
 			}
 		};
 		while ($read =~ s/\\1(.*?)\\0//){
 			my $str=$1;
-			my $cs=substr($str,0,30);
-			my $crc=unpack("n",substr($str,30,2));
+			$str=~s/\\\\/\\/g;
+			my $cs=substr($str,0,length($str)-2);
+			my $crc=unpack("n",substr($str,length($str)-2,2));
 			my $crc2= crcccitt($cs),"\n";
 			if($fmt eq "m"){
 				my $i=substr($str,0,1);
@@ -129,6 +129,24 @@ if($cmd =~ /^r/){
 		$par.=pack("N",0);
 		$par.=pack("N",0);
 		$par.=pack("N",0);
+	}elsif($scmd eq "rrr"){
+		$par.="G";
+		$par.=chr(shift); #gen
+#		$par.=pack("N",scalar(time)+300);
+		$par.=pack("N",1325250000);
+
+		$par.="r0ket mass p0ng";
+
+		$par.=pack("C",0);
+		$par.=pack("C",0);
+		$par.=pack("C",0);
+		$par.=pack("C",0);
+		$par.=pack("C",0);
+		$par.=pack("C",0);
+		$par.=pack("C",0);
+		$par.=pack("C",0);
+		$par.=pack("C",0);
+		print length($par),"\n";
 	}elsif($scmd eq "a"){
 		$par.="A";
 		$par.=chr(shift); #gen
@@ -146,6 +164,21 @@ if($cmd =~ /^r/){
 		$par.=pack("N",0);
 	}elsif($scmd eq "b"){
 		$par.="B";
+		$par.=chr(shift); #gen
+		$par.=pack("N",scalar(time)+1*60*60+ 600);
+
+        $par.= pack("C",shift||0);
+        $par.= pack("C",0);
+        $par.= pack("C",0);
+        $par.= pack("C",0);
+
+		$par.=pack("N",0);
+		$par.=pack("N",0);
+		$par.=pack("N",0);
+		$par.=pack("N",0);
+		$par.=pack("N",0);
+	}elsif($scmd eq "c"){
+		$par.="\x1";
 		$par.=chr(shift); #gen
 		$par.=pack("N",scalar(time)+1*60*60+ 600);
 
