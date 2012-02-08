@@ -97,8 +97,8 @@ uint8_t avr_txrx(uint8_t out) {
 }
 
 static void avr_cmd(uint8_t cmd[4], uint8_t ret[4]) {
-	static int do_ask = 0;
-	if (cmd[0] == 0x40) { do_ask = 1; }
+/*	static int do_ask = 0;
+	if (cmd[0] == 0x40) { do_ask = 1; }*/
 
 	uint8_t dummy[4];
 	if (ret == NULL) {
@@ -106,11 +106,11 @@ static void avr_cmd(uint8_t cmd[4], uint8_t ret[4]) {
 	}
 
 	for (int i = 0; i < 4; i++) {
-		lcdPrint(i == 0 ? "> " : " ");
+/*		lcdPrint(i == 0 ? "> " : " ");
 		lcdPrint(IntToStrX(cmd[i], 2));
-		ret[i] = avr_txrx(cmd[i]);
+*/		ret[i] = avr_txrx(cmd[i]);
 	}
-	lcdNl();
+/*	lcdNl();
 	for (int i = 0; i < 4; i++) {
 		lcdPrint(i == 0 ? "< " : " ");
 		lcdPrint(IntToStrX(ret[i], 2));
@@ -298,8 +298,6 @@ void main_avrflash(void) {
 			avr_sync();
 
 			ser_rx(); /* should be 0x20 */
-
-
 
 			ser_tx(Resp_STK_INSYNC);
 			ser_tx(Resp_STK_OK); /* hm... */
