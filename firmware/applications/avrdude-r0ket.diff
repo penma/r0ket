@@ -1,0 +1,310 @@
+diff -ru orig/avrdude.conf.in new/avrdude.conf.in
+--- orig/avrdude.conf.in	2011-09-15 16:57:51.000000000 +0200
++++ new/avrdude.conf.in	2012-02-08 13:39:47.000000000 +0100
+@@ -1007,6 +1007,12 @@
+   miso  = ~8;
+ ;
+ 
++programmer
++  id    = "r0ket";
++  desc  = "r0ket";
++  type  = r0ket;
++;
++
+ #
+ # PART DEFINITIONS
+ #
+diff -ru orig/config_gram.y new/config_gram.y
+--- orig/config_gram.y	2011-09-15 16:57:51.000000000 +0200
++++ new/config_gram.y	2012-02-08 13:43:37.000000000 +0100
+@@ -166,6 +166,7 @@
+ %token K_VCC
+ %token K_VFYLED
+ %token K_WIRING
++%token K_R0KET
+ 
+ %token K_NO
+ %token K_YES
+@@ -432,6 +433,12 @@
+     }
+   } |
+ 
++  K_TYPE TKN_EQUAL K_R0KET {
++    {
++      r0ket_initpgm(current_prog);
++    }
++  } |
++
+   K_TYPE TKN_EQUAL K_STK500HVSP {
+     {
+       stk500hvsp_initpgm(current_prog);
+diff -ru orig/lexer.l new/lexer.l
+--- orig/lexer.l	2011-09-15 16:57:51.000000000 +0200
++++ new/lexer.l	2012-02-08 13:43:59.000000000 +0100
+@@ -210,6 +210,7 @@
+ vcc              { yylval=NULL; return K_VCC; }
+ vfyled           { yylval=NULL; return K_VFYLED; }
+ wiring           { yylval=NULL; return K_WIRING; }
++r0ket            { yylval=NULL; return K_R0KET; }
+ 
+ timeout          { yylval=NULL; return K_TIMEOUT; }
+ stabdelay        { yylval=NULL; return K_STABDELAY; }
+diff -ru orig/Makefile.am new/Makefile.am
+--- orig/Makefile.am	2011-09-15 16:37:05.000000000 +0200
++++ new/Makefile.am	2012-02-08 13:20:16.000000000 +0100
+@@ -126,6 +126,7 @@
+ 	ppi.c \
+ 	ppi.h \
+ 	ppiwin.c \
++	r0ket.c \
+ 	safemode.c \
+ 	safemode.h \
+ 	serial.h \
+diff -ru orig/r0ket.c new/r0ket.c
+--- /dev/null	1970-01-01 01:00:00.000000000 +0100
++++ new/r0ket.c	2012-02-08 14:39:28.000000000 +0100
+@@ -0,0 +1,244 @@
++/*
++ * avrdude - A Downloader/Uploader for AVR device programmers
++ * Copyright (C) 2002-2004 Brian S. Dean <bsd@bsdhome.com>
++ * Copyright (C) 2008 Joerg Wunsch
++ *
++ * This program is free software; you can redistribute it and/or modify
++ * it under the terms of the GNU General Public License as published by
++ * the Free Software Foundation; either version 2 of the License, or
++ * (at your option) any later version.
++ *
++ * This program is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++ * GNU General Public License for more details.
++ *
++ * You should have received a copy of the GNU General Public License
++ * along with this program; if not, write to the Free Software
++ * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
++ */
++
++/* $Id: r0ket.c ? 2012-02-08 14:20:00Z penma $ */
++
++/*
++ * avrdude interface for AVRs hooked up to the r0ket
++ *
++ * Based on the STK500 driver, with everything but the "universal"
++ * command removed. Works just as well and is simpler to implement.
++ *
++ */
++
++#include "ac_cfg.h"
++
++#include <stdio.h>
++#include <stdlib.h>
++#include <string.h>
++#include <errno.h>
++#include <unistd.h>
++
++#include "avrdude.h"
++#include "avr.h"
++#include "pgm.h"
++#include "serial.h"
++
++#define RP_CMD_IDENTIFY '?'
++#define RP_ID_0         '<'
++#define RP_ID_1         '3'
++
++#define RP_CMD_ENABLE   'e'
++#define RP_CMD_DISABLE  'd'
++
++#define RP_CMD_AVR      'C'
++#define RP_RES_AVR      'R'
++
++static int r0ket_send(PROGRAMMER * pgm, unsigned char * buf, size_t len)
++{
++  return serial_send(&pgm->fd, buf, len);
++}
++
++static int r0ket_recv(PROGRAMMER * pgm, unsigned char * buf, size_t len)
++{
++  int rv;
++
++  rv = serial_recv(&pgm->fd, buf, len);
++  if (rv < 0) {
++    fprintf(stderr,
++            "%s: r0ket_recv(): programmer is not responding\n",
++            progname);
++    return -1;
++  }
++  return 0;
++}
++
++int r0ket_drain(PROGRAMMER * pgm, int display)
++{
++  return serial_drain(&pgm->fd, display);
++}
++
++static int r0ket_identify(PROGRAMMER * pgm)
++{
++  unsigned char buf[2];
++  buf[0] = RP_CMD_IDENTIFY;
++  r0ket_send(pgm, buf, 1);
++
++  if (r0ket_recv(pgm, buf, 2) < 0)
++    exit(1);
++
++  return buf[0] == RP_ID_0 && buf[1] == RP_ID_1;
++}
++
++/*
++ * transmit an AVR device command and return the results; 'cmd' and
++ * 'res' must point to at least a 4 byte data buffer
++ */
++static int r0ket_cmd(PROGRAMMER * pgm, unsigned char cmd[4],
++                     unsigned char res[4])
++{
++  unsigned char buf;
++
++  buf = RP_CMD_AVR;
++  r0ket_send(pgm, &buf, 1);
++  r0ket_send(pgm, cmd, 4);
++
++  if (r0ket_recv(pgm, &buf, 1) < 0)
++    exit(1);
++  if (buf != RP_RES_AVR) {
++    fprintf(stderr, "%s: r0ket_cmd(): programmer is out of sync\n", progname);
++    exit(1);
++  }
++
++  if (r0ket_recv(pgm, res, 4) < 0)
++    exit(1);
++
++  return 0;
++}
++
++/*
++ * issue the 'chip erase' command to the AVR device
++ */
++static int r0ket_chip_erase(PROGRAMMER * pgm, AVRPART * p)
++{
++  unsigned char cmd[4];
++  unsigned char res[4];
++
++  if (p->op[AVR_OP_CHIP_ERASE] == NULL) {
++    fprintf(stderr, "chip erase instruction not defined for part \"%s\"\n",
++            p->desc);
++    return -1;
++  }
++
++  memset(cmd, 0, sizeof(cmd));
++  avr_set_bits(p->op[AVR_OP_CHIP_ERASE], cmd);
++  pgm->cmd(pgm, cmd, res);
++
++  usleep(p->chip_erase_delay);
++  pgm->initialize(pgm, p);
++
++  return 0;
++}
++
++/*
++ * issue the 'program enable' command to the AVR device
++ */
++static int r0ket_program_enable(PROGRAMMER * pgm, AVRPART * p)
++{
++  unsigned char cmd[4];
++  unsigned char res[4];
++
++  if (p->op[AVR_OP_PGM_ENABLE] == NULL) {
++    fprintf(stderr, "program enable instruction not defined for part \"%s\"\n",
++            p->desc);
++    return -1;
++  }
++
++  memset(cmd, 0, sizeof(cmd));
++  avr_set_bits(p->op[AVR_OP_PGM_ENABLE], cmd);
++  pgm->cmd(pgm, cmd, res);
++
++  if (res[2] != cmd[1])
++    return -2;
++
++  return 0;
++}
++
++/*
++ * initialize the AVR device and prepare it to accept commands
++ */
++static int r0ket_initialize(PROGRAMMER * pgm, AVRPART * p)
++{
++  return pgm->program_enable(pgm, p);
++}
++
++static void r0ket_disable(PROGRAMMER * pgm)
++{
++  unsigned char buf;
++  buf = RP_CMD_DISABLE;
++  r0ket_send(pgm, &buf, 1);
++
++  if (r0ket_recv(pgm, &buf, 1) < 0)
++    exit(1);
++
++  return;
++}
++
++static void r0ket_enable(PROGRAMMER * pgm)
++{
++  unsigned char buf;
++  buf = RP_CMD_ENABLE;
++  r0ket_send(pgm, &buf, 1);
++
++  if (r0ket_recv(pgm, &buf, 1) < 0)
++    exit(1);
++
++  return;
++}
++
++static int r0ket_open(PROGRAMMER * pgm, char * port)
++{
++  strcpy(pgm->port, port);
++  if (serial_open(port, pgm->baudrate? pgm->baudrate: 115200, &pgm->fd)==-1) {
++    return -1;
++  }
++
++  /*
++   * drain any extraneous input
++   */
++  r0ket_drain(pgm, 0);
++
++  if (!r0ket_identify(pgm))
++    return -1;
++
++  return 0;
++}
++
++static void r0ket_close(PROGRAMMER * pgm)
++{
++  serial_close(&pgm->fd);
++  pgm->fd.ifd = -1;
++}
++
++
++static void r0ket_display(PROGRAMMER * pgm, const char * p)
++{
++  return;
++}
++
++void r0ket_initpgm(PROGRAMMER * pgm)
++{
++  strcpy(pgm->type, "r0ket");
++
++  /*
++   * mandatory functions
++   */
++  pgm->initialize     = r0ket_initialize;
++  pgm->display        = r0ket_display;
++  pgm->enable         = r0ket_enable;
++  pgm->disable        = r0ket_disable;
++  pgm->program_enable = r0ket_program_enable;
++  pgm->chip_erase     = r0ket_chip_erase;
++  pgm->cmd            = r0ket_cmd;
++  pgm->open           = r0ket_open;
++  pgm->close          = r0ket_close;
++  pgm->read_byte      = avr_read_byte_default;
++  pgm->write_byte     = avr_write_byte_default;
++}
