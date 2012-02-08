@@ -38,6 +38,8 @@
 
 #define Cmnd_STK_PROG_PAGE 0x64
 
+#define Cmnd_STK_READ_PAGE 0x74
+
 #define Resp_STK_INSYNC 0x14
 #define Resp_STK_OK 0x10
 #define Resp_STK_FAILED 0x11
@@ -300,6 +302,42 @@ void main_avrflash(void) {
 			ser_rx(); /* should be 0x20 */
 
 			ser_tx(Resp_STK_INSYNC);
+			ser_tx(Resp_STK_OK); /* hm... */
+		} else if (input == Cmnd_STK_READ_PAGE) {
+			uint16_t blocksize = 0;
+			blocksize |= ser_rx() << 8;
+			blocksize |= ser_rx();
+			uint8_t memtype = ser_rx(); /* CHECK ME!! */
+			ser_rx(); /* should be 0x20 */
+
+			ser_tx(Resp_STK_INSYNC);
+
+			uint8_t cmd[4], ret[4];
+
+			for (int i = 0; i < blocksize; i += 2) {
+
+				lcdPrint("R:");
+				lcdPrintShortHex(addr);
+				lcdPrint("+");
+				lcdPrintCharHex(i);
+				lcdNl();
+				lcdRefresh();
+
+				cmd[0] = 0x20;
+				cmd[1] = (addr + (i >> 1)) >> 8;
+				cmd[2] = (addr + (i >> 1)) & 0xff;
+				avr_cmd(cmd, ret);
+				avr_sync();
+
+				ser_tx(ret[3]);
+
+				cmd[0] = 0x28;
+				avr_cmd(cmd, ret);
+				avr_sync();
+
+				ser_tx(ret[3]);
+			}
+
 			ser_tx(Resp_STK_OK); /* hm... */
 		} else {
 /*			lcdPrint("cmd? ");
