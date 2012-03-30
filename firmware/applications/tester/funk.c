@@ -159,7 +159,7 @@ void f_enctog(void){
 void f_send(void){
     uint8_t status;
 
-    status = openbeaconSend();
+    openbeaconSend();
     lcdPrint("Status:");
     lcdPrintCharHex(status);
     lcdNl();

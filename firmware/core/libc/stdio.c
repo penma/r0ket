@@ -59,17 +59,6 @@
 //------------------------------------------------------------------------------
 
 //------------------------------------------------------------------------------
-// Writes a character inside the given string. Returns 1.
-// \param pStr  Storage string.
-// \param c  Character to write.
-//------------------------------------------------------------------------------
-signed int append_char(char *pStr, char c)
-{
-    *pStr = c;
-    return 1;
-}
-
-//------------------------------------------------------------------------------
 // Writes a string inside the given string.
 // Returns the size of the written
 // string.
@@ -128,7 +117,7 @@ signed int PutUnsignedInt(
 
         while (width > 0) {
 
-            append_char(pStr, fill);
+            pStr[0] = fill;
             pStr++;
             num++;
             width--;
@@ -136,7 +125,8 @@ signed int PutUnsignedInt(
     }
 
     // Write lower digit
-    num += append_char(pStr, (value % 10) + '0');
+    pStr[0] = (value % 10) + '0';
+    num++;
 
     return num;
 }
@@ -196,7 +186,7 @@ signed int PutSignedInt(
         // Write filler characters
         while (width > 0) {
 
-            append_char(pStr, fill);
+            pStr[0] = fill;
             pStr++;
             num++;
             width--;
@@ -205,13 +195,15 @@ signed int PutSignedInt(
         // Write sign
         if (value < 0) {
 
-            num += append_char(pStr, '-');
+            pStr[0] = '-';
+            num++;
             pStr++;
         }
     }
 
     // Write lower digit
-    num += append_char(pStr, (absolute % 10) + '0');
+    pStr[0] = (absolute % 10) + '0';
+    num++;
 
     return num;
 }
@@ -249,7 +241,7 @@ signed int PutHexa(
 
         while (width > 0) {
 
-            append_char(pStr, fill);
+            pStr[0] = fill;
             pStr++;
             num++;
             width--;
@@ -259,15 +251,15 @@ signed int PutHexa(
     // Write current digit
     if ((value & 0xF) < 10) {
 
-        append_char(pStr, (value & 0xF) + '0');
+        pStr[0] = (value & 0xF) + '0';
     }
     else if (maj) {
 
-        append_char(pStr, (value & 0xF) - 10 + 'A');
+        pStr[0] = (value & 0xF) - 10 + 'A';
     }
     else {
 
-        append_char(pStr, (value & 0xF) - 10 + 'a');
+        pStr[0] = (value & 0xF) - 10 + 'a';
     }
     num++;
 
@@ -356,7 +348,7 @@ signed int vsnprintf(char *pStr, size_t length, const char *pFormat, va_list ap)
             case 'x': num = PutHexa(pStr, fill, width, 0, va_arg(ap, unsigned int)); break;
             case 'X': num = PutHexa(pStr, fill, width, 1, va_arg(ap, unsigned int)); break;
             case 's': num = PutString(pStr, fill, width, va_arg(ap, char *)); break;
-            case 'c': num = append_char(pStr, va_arg(ap, unsigned int)); break;
+            case 'c': num = pStr[0] = va_arg(ap, unsigned int); break;
             default:
                 return EOF;
             }
