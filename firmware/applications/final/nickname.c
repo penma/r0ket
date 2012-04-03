@@ -58,7 +58,7 @@ void simpleNickname(void) {
 
 void init_nick(void){
 	readTextFile("nick.cfg",GLOBAL(nickname),MAXNICK);
-	readTextFile("font.cfg",GLOBAL(nickfont),FILENAMELEN);
+	readTextFile("font.cfg",GLOBAL(nickfont),FILENAMELEN*2);
 	readTextFile("l0nick.cfg",GLOBAL(nickl0),FILENAMELEN);
 };
 
